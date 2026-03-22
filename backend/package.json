@@ -1,0 +1,36 @@
+{
+  "name": "tailtimes-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts",
+    "db:migrate": "tsx src/scripts/migrate-db.ts",
+    "db:generate": "drizzle-kit generate:pg --config=drizzle.config.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:reset": "tsx src/scripts/reset-db.ts",
+    "db:seed": "tsx src/scripts/seed-db.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@fastify/multipart": "^8.0.0",
+    "@fastify/rate-limit": "^9.1.0",
+    "cloudinary": "^1.41.3",
+    "drizzle-orm": "^0.29.3",
+    "fastify": "^4.25.2",
+    "firebase-admin": "^12.0.0",
+    "postgres": "^3.4.3",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "drizzle-kit": "^0.20.9",
+    "eslint": "^8.56.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  }
+}
