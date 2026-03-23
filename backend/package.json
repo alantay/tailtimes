@@ -19,6 +19,7 @@
     "@fastify/multipart": "^8.0.0",
     "@fastify/rate-limit": "^9.1.0",
     "cloudinary": "^1.41.3",
+    "dotenv": "^16.4.7",
     "drizzle-orm": "^0.29.3",
     "fastify": "^4.25.2",
     "firebase-admin": "^12.0.0",

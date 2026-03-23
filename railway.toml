@@ -1,0 +1,25 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd backend && npm install && npm run build"
+
+[deploy]
+startCommand = "cd backend && npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[environments.production]
+variables = {}
+
+[environments.development] 
+variables = {}
+
+# Service configuration
+[[services]]
+name = "tailtimes-backend"
+source = "backend"
+
+[services.variables]
+NODE_ENV = "production"
+PORT = "3001"
