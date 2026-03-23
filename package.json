@@ -1,0 +1,36 @@
+{
+  "name": "tailtimes-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "mobile",
+    "backend",
+    "web",
+    "shared"
+  ],
+  "scripts": {
+    "setup": "npm install && npm run install:mobile && npm run install:backend && npm run install:web",
+    "install:mobile": "cd mobile && npm install",
+    "install:backend": "cd backend && npm install",
+    "install:web": "cd web && npm install",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:mobile\" \"npm run dev:web\"",
+    "dev:mobile": "cd mobile && expo start",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:web": "cd web && npm run dev",
+    "build": "npm run build:backend && npm run build:web",
+    "build:backend": "cd backend && npm run build",
+    "build:web": "cd web && npm run build",
+    "test": "npm run test:backend",
+    "test:backend": "cd backend && npm test",
+    "db:migrate": "cd backend && npm run db:migrate",
+    "db:reset": "cd backend && npm run db:reset",
+    "db:seed": "cd backend && npm run db:seed",
+    "lint": "npm run lint:backend && npm run lint:mobile",
+    "lint:backend": "cd backend && npm run lint",
+    "lint:mobile": "cd mobile && npm run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  }
+}

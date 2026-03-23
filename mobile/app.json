@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "TailTimes",
+    "slug": "tailtimes", 
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "tailtimes",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tailtimes.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "TailTimes needs camera access to capture pet photos and videos.",
+        "NSPhotoLibraryUsageDescription": "TailTimes needs photo library access to select and upload media.",
+        "NSMicrophoneUsageDescription": "TailTimes needs microphone access for recording videos with sound."
+      }
+    },
+    "android": {
+      "package": "com.tailtimes.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE", 
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "TailTimes needs camera access to capture pet photos and videos."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TailTimes needs photo library access to select and upload media."
+        }
+      ]
+    ]
+  }
+}

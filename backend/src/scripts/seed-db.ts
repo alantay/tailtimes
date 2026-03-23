@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { db } from '../models/db.js';
 import { sessionStats, sessions, sitters, updates } from '../models/schema.js';
 
