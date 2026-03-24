@@ -15,6 +15,26 @@ export function formatShortDate(value?: string | null) {
   });
 }
 
+export function formatUpdateTimestamp(value?: string | null) {
+  if (!value) {
+    return 'No time recorded';
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function normalizeDateInput(value: string) {
   const trimmed = value.trim();
 

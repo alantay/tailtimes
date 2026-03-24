@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { apiGet, apiPost } from './api';
-import { SessionUpdate } from '../types/api';
+import { SessionUpdate, SessionUpdateTag } from '../types/api';
 
 const publicCloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
 const publicUploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
@@ -45,6 +45,7 @@ interface UploadOptions {
   sessionId: string;
   asset: UploadableAsset;
   caption?: string;
+  tags?: SessionUpdateTag[];
 }
 
 type UploadConfig =
@@ -189,6 +190,7 @@ export async function uploadSessionMedia(options: UploadOptions) {
     mediaUrl: uploadResult.secure_url,
     type: uploadResult.resource_type === 'video' ? 'video' : 'photo',
     caption: options.caption?.trim() || undefined,
+    tags: options.tags,
     metadata: {
       bytes: uploadResult.bytes,
       width: uploadResult.width,

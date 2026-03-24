@@ -1,16 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Video, ResizeMode } from 'expo-av';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Image, Share, ScrollView, Text, View } from 'react-native';
+import { Alert, Image, Share, ScrollView, Text, View } from 'react-native';
 import { Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppLoadingScreen from '../../../src/components/AppLoadingScreen';
 import { useAuth } from '../../../src/context/AuthContext';
 import { apiGet } from '../../../src/services/api';
-import { SessionDetail } from '../../../src/types/api';
-import { formatShortDate } from '../../../src/utils/formatDate';
+import { SessionDetail, SessionUpdateTag } from '../../../src/types/api';
+import { formatShortDate, formatUpdateTimestamp } from '../../../src/utils/formatDate';
+import { openVideoPreview } from '../../../src/utils/openVideoPreview';
 import { buildOwnerFeedUrl } from '../../../src/utils/ownerFeed';
+
+const tagStyles: Record<SessionUpdateTag, { backgroundColor: string; borderColor: string; textColor: string }> = {
+  walks: { backgroundColor: '#e0f2fe', borderColor: '#bae6fd', textColor: '#0c4a6e' },
+  food: { backgroundColor: '#fef3c7', borderColor: '#fde68a', textColor: '#92400e' },
+  lounging: { backgroundColor: '#dcfce7', borderColor: '#bbf7d0', textColor: '#166534' },
+  sleeping: { backgroundColor: '#e0e7ff', borderColor: '#c7d2fe', textColor: '#3730a3' },
+  misc: { backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', textColor: '#374151' },
+};
 
 export default function SessionDetailScreen() {
   const { user, isLoading } = useAuth();
@@ -66,12 +74,25 @@ export default function SessionDetailScreen() {
 
   const session = sessionQuery.data;
   const ownerFeedUrl = buildOwnerFeedUrl(session.shareLink);
+  const canCapture = session.isActive && session.status === 'live';
+  const sessionStatusLabel = session.status === 'live' ? 'Live' : session.status === 'upcoming' ? 'Upcoming' : 'Ended';
 
   async function handleShare() {
     await Share.share({
       message: ownerFeedUrl,
       url: ownerFeedUrl,
     });
+  }
+
+  async function handlePreviewVideo(uri: string) {
+    try {
+      await openVideoPreview(uri);
+    } catch (previewError) {
+      Alert.alert(
+        'Preview unavailable',
+        previewError instanceof Error ? previewError.message : 'Could not open this video preview.'
+      );
+    }
   }
 
   return (
@@ -98,22 +119,55 @@ export default function SessionDetailScreen() {
         </Text>
       </View>
 
-      {session.isActive ? (
-        <Pressable
-          onPress={() => router.push(`/sessions/${session.id}/capture`)}
-          style={{
-            minHeight: 56,
-            borderRadius: 16,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            backgroundColor: '#16a34a',
-          }}
-        >
-          <Ionicons name="camera" size={22} color="#ffffff" />
-          <Text style={{ fontSize: 17, fontWeight: '700', color: '#ffffff' }}>Capture update</Text>
-        </Pressable>
+      {canCapture ? (
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: `/sessions/${session.id}/capture`,
+                params: { intent: 'camera' },
+              })
+            }
+            style={{
+              flex: 1,
+              minHeight: 56,
+              borderRadius: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              backgroundColor: '#16a34a',
+            }}
+          >
+            <Ionicons name="camera" size={22} color="#ffffff" />
+            <Text style={{ fontSize: 17, fontWeight: '700', color: '#ffffff' }}>Capture update</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: `/sessions/${session.id}/capture`,
+                params: { intent: 'library' },
+              })
+            }
+            style={{
+              minHeight: 56,
+              minWidth: 126,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: '#bbf7d0',
+              backgroundColor: '#f0fdf4',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              paddingHorizontal: 14,
+            }}
+          >
+            <Ionicons name="images-outline" size={20} color="#15803d" />
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#15803d' }}>Gallery</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       <View
@@ -130,6 +184,8 @@ export default function SessionDetailScreen() {
         <Text style={{ fontSize: 14, color: '#6b7280' }}>
           {formatShortDate(session.startDate)} to {formatShortDate(session.endDate)}
         </Text>
+        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
+        <Text style={{ fontSize: 14, color: '#6b7280' }}>{sessionStatusLabel}</Text>
         <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
         <Text style={{ fontSize: 14, color: '#6b7280' }}>
           {session.stats.totalUpdates} update{session.stats.totalUpdates === 1 ? '' : 's'}
@@ -200,12 +256,35 @@ export default function SessionDetailScreen() {
               }}
             >
               {update.type === 'video' ? (
-                <Video
-                  source={{ uri: update.mediaUrl }}
-                  useNativeControls
-                  resizeMode={ResizeMode.COVER}
-                  style={{ width: '100%', height: 260, backgroundColor: '#000000' }}
-                />
+                <Pressable
+                  onPress={() => {
+                    void handlePreviewVideo(update.mediaUrl);
+                  }}
+                  style={{
+                    height: 260,
+                    backgroundColor: '#111827',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 12,
+                    paddingHorizontal: 24,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 32,
+                      backgroundColor: 'rgba(255,255,255,0.14)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="play" size={28} color="#ffffff" style={{ marginLeft: 4 }} />
+                  </View>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#ffffff' }}>
+                    Preview video
+                  </Text>
+                </Pressable>
               ) : (
                 <Image
                   source={{ uri: update.mediaUrl }}
@@ -214,13 +293,40 @@ export default function SessionDetailScreen() {
                 />
               )}
 
-              <View style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 18, gap: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827', textTransform: 'capitalize' }}>
-                  {update.type} update
+              <View style={{ paddingHorizontal: 18, paddingTop: 14, paddingBottom: 18, gap: 10 }}>
+                <Text style={{ fontSize: 12, color: '#9ca3af' }}>
+                  {formatUpdateTimestamp(update.createdAt)}
                 </Text>
-
-                <Text style={{ color: '#6b7280' }}>{update.caption || 'No caption added for this update yet.'}</Text>
-                <Text style={{ fontSize: 12, color: '#9ca3af' }}>{formatShortDate(update.createdAt)}</Text>
+                {update.tags?.length ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {update.tags.map((tag) => (
+                      <View
+                        key={tag}
+                        style={{
+                          alignSelf: 'flex-start',
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: tagStyles[tag].borderColor,
+                          backgroundColor: tagStyles[tag].backgroundColor,
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: '700',
+                            color: tagStyles[tag].textColor,
+                            textTransform: 'capitalize',
+                          }}
+                        >
+                          {tag}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {update.caption ? <Text style={{ color: '#6b7280' }}>{update.caption}</Text> : null}
               </View>
             </View>
           ))

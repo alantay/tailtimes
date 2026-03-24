@@ -10,6 +10,11 @@
 - Expo Router for navigation
 - NativeWind (Tailwind CSS for React Native)
 
+**Current capture choice**
+- For the current Expo Go setup, session capture uses the system camera via `expo-image-picker` instead of an embedded camera surface
+- This preserves native photo/video switching and camera flipping without reintroducing the in-app camera instability seen in Expo Go
+- A separate `Gallery` action lets sitters choose existing photos or videos
+
 ## Backend
 
 **Node.js with Fastify**
@@ -41,6 +46,11 @@
 2. Mobile uploads file directly to Cloudinary
 3. On success, mobile calls `POST /api/media` with the Cloudinary URL + metadata
 4. Backend stores URL in `updates` table and increments `session_stats`
+
+**Update metadata (MVP):**
+- Updates support optional `caption`
+- Updates support optional multiple tags (`walks`, `food`, `lounging`, `sleeping`, `misc`)
+- Owner and sitter feeds render newest-first with date and time
 
 ## Authentication
 
@@ -107,18 +117,20 @@
 ## Implementation Phases
 
 ### Phase 1: MVP Core
-1. React Native app with contextual capture (Instagram-style flow per session)
+1. React Native app with contextual capture (system camera / gallery flow per live session)
 2. Direct Cloudinary upload from mobile (signed preset)
 3. Fastify backend: sitter, session, update, and owner-feed routes
 4. Firebase Auth for sitters (email/password)
 5. Next.js owner feed page on Vercel (`web/app/s/[shareLink]`)
 6. Shared TypeScript types across backend, mobile, and web
 7. 2-tab navigation (Sessions + Profile) with contextual capture from session detail
+8. Session stay windows with automatic `upcoming` / `live` / `ended` status
 
 ### Phase 2: Polish & Scale
 1. Supabase Realtime subscriptions (owner feed live updates)
 2. Row-Level Security on Postgres
 3. Offline support with sync
+4. Stable playable preview for newly recorded local videos before posting
 5. Google / Apple sign-in
 6. Upload progress and retry handling
 

@@ -55,6 +55,7 @@ async function main() {
       caption: 'Morning walk done. Mochi found every patch of sunshine.',
       metadata: {
         cloudinaryPublicId: 'tailtimes/sessions/mochi/morning-walk',
+        tags: ['walks', 'lounging'],
         width: 1600,
         height: 1200,
         format: 'jpg',
@@ -70,6 +71,7 @@ async function main() {
       caption: 'Afternoon playtime and zoomies in the yard.',
       metadata: {
         cloudinaryPublicId: 'tailtimes/sessions/mochi/playtime',
+        tags: ['food', 'misc'],
         duration: 18,
         format: 'mp4',
       },
