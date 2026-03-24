@@ -8,6 +8,13 @@
       "when": 1774167812835,
       "tag": "0000_mysterious_bruce_banner",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1774266836341,
+      "tag": "0001_dizzy_shiver_man",
+      "breakpoints": true
     }
   ]
 }

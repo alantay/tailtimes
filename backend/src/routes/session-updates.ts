@@ -4,8 +4,32 @@ import { z } from 'zod';
 import { db } from '../models/db.js';
 import { sessionStats, sessions, sitters, updates } from '../models/schema.js';
 import { CloudinaryService } from '../services/cloudinary.js';
+import type { SessionUpdate } from '../types/api.js';
 import { authenticateUser } from '../utils/auth-middleware.js';
 import { parseWithSchema } from '../utils/validate.js';
+
+function toSessionUpdate(record: {
+  id: string;
+  sessionId: string;
+  type: string;
+  mediaUrl: string | null;
+  caption: string | null;
+  metadata: unknown;
+  createdAt: Date;
+}): SessionUpdate {
+  return {
+    id: record.id,
+    sessionId: record.sessionId,
+    type: record.type === 'video' ? 'video' : 'photo',
+    mediaUrl: record.mediaUrl ?? '',
+    caption: record.caption,
+    metadata:
+      record.metadata && typeof record.metadata === 'object'
+        ? (record.metadata as Record<string, unknown>)
+        : null,
+    createdAt: record.createdAt.toISOString(),
+  };
+}
 
 const sessionIdParamsSchema = z.object({
   id: z.string().uuid(),
@@ -21,7 +45,6 @@ const createSessionUpdateSchema = z.object({
   mediaUrl: z.string().url(),
   type: z.enum(['photo', 'video']),
   caption: z.string().trim().max(500).optional(),
-  isPublic: z.boolean().optional().default(false),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -79,7 +102,6 @@ const sessionUpdateRoutes: FastifyPluginAsync = async (fastify) => {
             ...body.metadata,
             cloudinaryPublicId: body.cloudinaryPublicId,
           },
-          isPublic: body.isPublic,
           createdAt: now,
         })
         .returning();
@@ -106,7 +128,6 @@ const sessionUpdateRoutes: FastifyPluginAsync = async (fastify) => {
       thumbnailUrl: CloudinaryService.generateThumbnail(body.cloudinaryPublicId),
       type: createdUpdate.type,
       caption: createdUpdate.caption,
-      isPublic: createdUpdate.isPublic,
       createdAt: createdUpdate.createdAt,
     });
   });
@@ -139,14 +160,13 @@ const sessionUpdateRoutes: FastifyPluginAsync = async (fastify) => {
         mediaUrl: updates.mediaUrl,
         caption: updates.caption,
         metadata: updates.metadata,
-        isPublic: updates.isPublic,
         createdAt: updates.createdAt,
       })
       .from(updates)
       .where(eq(updates.sessionId, id))
       .orderBy(desc(updates.createdAt));
 
-    return sessionUpdates;
+    return sessionUpdates.map(toSessionUpdate);
   });
 
   fastify.delete(

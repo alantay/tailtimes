@@ -4,8 +4,36 @@ import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../models/db.js';
 import { sessionStats, sessions, sitters, updates } from '../models/schema.js';
+import type { SessionDetail, SessionSummary, SessionUpdate } from '../types/api.js';
 import { authenticateUser } from '../utils/auth-middleware.js';
 import { parseWithSchema } from '../utils/validate.js';
+
+function toIsoString(value: Date | null | undefined) {
+  return value ? value.toISOString() : null;
+}
+
+function toSessionUpdate(record: {
+  id: string;
+  sessionId: string;
+  type: string;
+  mediaUrl: string | null;
+  caption: string | null;
+  metadata: unknown;
+  createdAt: Date;
+}): SessionUpdate {
+  return {
+    id: record.id,
+    sessionId: record.sessionId,
+    type: record.type === 'video' ? 'video' : 'photo',
+    mediaUrl: record.mediaUrl ?? '',
+    caption: record.caption,
+    metadata:
+      record.metadata && typeof record.metadata === 'object'
+        ? (record.metadata as Record<string, unknown>)
+        : null,
+    createdAt: record.createdAt.toISOString(),
+  };
+}
 
 const createSessionSchema = z.object({
   petName: z.string().trim().min(1),
@@ -21,7 +49,6 @@ const updateSessionSchema = z
   .object({
     endDate: z.string().datetime().nullable().optional(),
     notes: z.string().trim().max(1000).nullable().optional(),
-    isPublic: z.boolean().optional(),
     isActive: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -67,7 +94,6 @@ async function getOwnedSession(sessionId: string, sitterId: string) {
       endDate: sessions.endDate,
       shareLink: sessions.shareLink,
       isActive: sessions.isActive,
-      isPublic: sessions.isPublic,
       notes: sessions.notes,
       createdAt: sessions.createdAt,
       updatedAt: sessions.updatedAt,
@@ -84,7 +110,7 @@ async function getOwnedSession(sessionId: string, sitterId: string) {
   return session ?? null;
 }
 
-function formatSession(record: Awaited<ReturnType<typeof getOwnedSession>>) {
+function formatSession(record: Awaited<ReturnType<typeof getOwnedSession>>): SessionSummary | null {
   if (!record) {
     return null;
   }
@@ -96,19 +122,18 @@ function formatSession(record: Awaited<ReturnType<typeof getOwnedSession>>) {
     petType: record.petType,
     ownerName: record.ownerName,
     ownerContact: record.ownerContact,
-    startDate: record.startDate,
-    endDate: record.endDate,
+    startDate: record.startDate.toISOString(),
+    endDate: toIsoString(record.endDate),
     shareLink: record.shareLink,
-    isActive: record.isActive,
-    isPublic: record.isPublic,
+    isActive: record.isActive ?? false,
     notes: record.notes,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
     stats: {
       totalUpdates: record.totalUpdates ?? 0,
       totalPhotos: record.totalPhotos ?? 0,
       totalVideos: record.totalVideos ?? 0,
-      lastUpdateAt: record.lastUpdateAt ?? null,
+      lastUpdateAt: toIsoString(record.lastUpdateAt),
     },
   };
 }
@@ -189,7 +214,6 @@ const sessionRoutes: FastifyPluginAsync = async (fastify) => {
         endDate: sessions.endDate,
         shareLink: sessions.shareLink,
         isActive: sessions.isActive,
-        isPublic: sessions.isPublic,
         notes: sessions.notes,
         createdAt: sessions.createdAt,
         updatedAt: sessions.updatedAt,
@@ -203,7 +227,7 @@ const sessionRoutes: FastifyPluginAsync = async (fastify) => {
       .where(eq(sessions.sitterId, sitter.id))
       .orderBy(desc(sessions.createdAt));
 
-    return records.map((record) => formatSession(record));
+    return records.map((record) => formatSession(record) as SessionSummary);
   });
 
   fastify.get('/api/sessions/:id', { preHandler: authenticateUser }, async (request, reply) => {
@@ -234,17 +258,18 @@ const sessionRoutes: FastifyPluginAsync = async (fastify) => {
         mediaUrl: updates.mediaUrl,
         caption: updates.caption,
         metadata: updates.metadata,
-        isPublic: updates.isPublic,
         createdAt: updates.createdAt,
       })
       .from(updates)
       .where(eq(updates.sessionId, id))
       .orderBy(desc(updates.createdAt));
 
-    return {
-      ...formatSession(session),
-      updates: sessionUpdates,
+    const response: SessionDetail = {
+      ...(formatSession(session) as SessionSummary),
+      updates: sessionUpdates.map(toSessionUpdate),
     };
+
+    return response;
   });
 
   fastify.patch('/api/sessions/:id', { preHandler: authenticateUser }, async (request, reply) => {
@@ -274,7 +299,6 @@ const sessionRoutes: FastifyPluginAsync = async (fastify) => {
       .set({
         endDate: body.endDate === undefined ? undefined : body.endDate ? new Date(body.endDate) : null,
         notes: body.notes,
-        isPublic: body.isPublic,
         isActive: body.isActive,
         updatedAt: new Date(),
       })

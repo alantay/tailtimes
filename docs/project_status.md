@@ -27,7 +27,7 @@ The checklist below is easiest to execute in dependency order:
 
 ## Immediate Next Task
 
-The next technical task is **Mobile navigation stabilization and cleanup**. The sitter flow is now validated in the iOS Simulator through auth, session list, session creation, and session detail, but the Expo Router native `Stack` / `Tabs` navigators are still crashing on native screen components in Expo Go. The temporary `Slot`-based layouts and dev-only auto-validation helpers should be removed once the native navigator/runtime mismatch is resolved cleanly.
+The next technical task is **Shared contracts and deep-link owner access**. The public web owner feed and the in-app session timeline are now visually polished enough for real MVP use, so the next clean-up step is extracting owner/session/update response types into `shared/` and then deciding whether `tailtimes://s/:shareLink` should open a lightweight owner view inside the app or continue deferring to the browser-only flow.
 
 ---
 
@@ -45,10 +45,11 @@ The next technical task is **Mobile navigation stabilization and cleanup**. The 
 ### Mobile
 
 - `mobile/app/_layout.tsx` – Root layout, needs auth state
-- `mobile/app/(tabs)/_layout.tsx` – Tab bar (3 tabs: Sessions, Capture, Profile)
-- `mobile/app/(tabs)/index.tsx` – Sessions list (stub)
-- `mobile/app/(tabs)/camera.tsx` – Camera capture (stub)
-- `mobile/app/(tabs)/profile.tsx` – Sitter profile (stub)
+- `mobile/app/(tabs)/_layout.tsx` – Tab bar (2 tabs: Sessions, Profile)
+- `mobile/app/(tabs)/index.tsx` – Sessions list with quick-capture icons
+- `mobile/app/(tabs)/profile.tsx` – Sitter profile
+- `mobile/app/sessions/[id]/index.tsx` – Session detail with capture button
+- `mobile/app/sessions/[id]/capture.tsx` – Instagram-style contextual capture screen
 
 ---
 
@@ -78,9 +79,9 @@ Create `backend/src/routes/sitters.ts`:
   - Auth: required
   - Body: any subset of `{ name, bio, phone, location, profileImage }`
   - Returns: updated sitter record
-- [x] `GET /api/sitters/:id` – Get public sitter profile (for portfolio)
+- [x] `GET /api/sitters/:id` – Get public sitter profile
   - Auth: none
-  - Returns: `{ name, bio, location, profileImage, publicSessionCount }`
+  - Returns: `{ name, bio, location, profileImage }`
 
 ### 3. Backend – Session Routes
 
@@ -97,9 +98,9 @@ Create `backend/src/routes/sessions.ts`:
 - [x] `GET /api/sessions/:id` – Get own session detail
   - Auth: required
   - Returns: session + updates
-- [x] `PATCH /api/sessions/:id` – Update session (end date, notes, isPublic)
+- [x] `PATCH /api/sessions/:id` – Update session (end date, notes)
   - Auth: required, must own session
-  - Body: any subset of `{ endDate, notes, isPublic, isActive }`
+  - Body: any subset of `{ endDate, notes, isActive }`
 - [x] `DELETE /api/sessions/:id` – Soft delete (set `isActive = false`)
   - Auth: required, must own session
 
@@ -109,7 +110,7 @@ Create `backend/src/routes/session-updates.ts`:
 
 - [x] `POST /api/sessions/:id/updates` – Upload a photo/video update
   - Auth: required, must own session
-  - Body: direct-upload metadata + `{ caption?, isPublic? }`
+  - Body: direct-upload metadata + `{ caption? }`
   - Logic: Store the Cloudinary result in `updates`, increment `session_stats`, and return a thumbnail URL
   - Returns: `{ id, mediaUrl, thumbnailUrl, type, caption, createdAt }`
 - [x] `GET /api/sessions/:id/updates` – List updates for own session
@@ -182,13 +183,14 @@ Create `mobile/app/(auth)/` directory with Expo Router:
 
 ### 11. Mobile – Sessions Screen (Tab 1: Home)
 
-Replace stub in `mobile/app/(tabs)/index.tsx`:
+`mobile/app/(tabs)/index.tsx`:
 
 - [x] Fetch sessions from `GET /api/sessions` using React Query (`useQuery`)
-- [x] Display list of sessions with: pet name, pet type icon, start date, update count
-- [x] Empty state: "No sessions yet – start one!" with CTA button
-- [x] Tap session → navigate to `mobile/app/sessions/[id].tsx`
-- [x] FAB (floating action button) → navigate to `mobile/app/sessions/new.tsx`
+- [x] Display list of sessions with: pet name, pet type, owner name, start/end dates, update count
+- [x] Empty state: "No sessions yet" with CTA button
+- [x] Compact "New session" button in list header (replaces old FAB)
+- [x] Quick-capture camera icon on each active session card → opens `sessions/[id]/capture`
+- [x] Tap session card → navigate to session detail
 - [x] Simulator validation: sessions list renders after Firebase auth succeeds
 
 Create `mobile/app/sessions/new.tsx`:
@@ -198,43 +200,38 @@ Create `mobile/app/sessions/new.tsx`:
 - [x] Validation: require pet name and start date
 - [x] Simulator validation: session creation succeeds against the live backend API
 
-Create `mobile/app/sessions/[id].tsx`:
+### 12. Mobile – Session Detail (`sessions/[id]/index.tsx`)
 
 - [x] Fetch session detail from `GET /api/sessions/:id`
-- [x] Show session header: pet name, dates, update count
-- [x] Scrollable feed of updates (photos/videos)
-- [x] Share button: opens the native share sheet with `https://tailtimes.app/s/<shareLink>`
-- [x] Simulator validation: session detail renders after successful creation
-- [ ] FAB → navigate to camera tab pre-loaded with this sessionId
+- [x] Show session header: pet name, pet type, dates
+- [x] Prominent "Capture update" button at top (active sessions only)
+- [x] Compact owner link section: inline URL + native Share button
+- [x] Compact session snapshot: single row with date range + update count
+- [x] Scrollable updates timeline (photos/videos with captions)
 
-### 12. Mobile – Camera / Upload Screen (Tab 2: Capture)
+### 13. Mobile – Contextual Capture (`sessions/[id]/capture.tsx`)
 
-Replace stub in `mobile/app/(tabs)/camera.tsx`:
+Instagram-style capture flow, launched from session detail or home screen:
 
-- [ ] Session selector at top (dropdown to choose active session) — pre-fill if navigating from a session
-- [ ] Camera view using `expo-camera` (`CameraView` component)
-  - [ ] Toggle front/back camera
-  - [ ] Capture photo (tap shutter) or video (hold shutter, max 60s)
-- [ ] After capture: preview screen with options:
-  - [ ] Retake
-  - [ ] Add optional caption (text input)
-  - [ ] Toggle "Add to portfolio" (`isPublic` flag)
-  - [ ] Upload button → `POST /api/sessions/:id/updates`
-- [ ] Upload progress indicator (show % or spinner)
-- [ ] On success: brief success toast, reset to camera ready state
-- [ ] Image picker fallback: "choose from library" button using `expo-image-picker`
+- [x] Session context pill at top: "{petName} for {ownerName}"
+- [x] 3 states: Capture → Compose → Uploading
+- [x] Auto-launches system camera on Expo Go (fallback from embedded camera)
+- [x] Compose screen: photo/video preview + expandable caption input + "Send to {ownerName}" button
+- [x] "Retake" secondary button to go back to capture
+- [x] On success: `router.back()` pops to session detail (no alert dialog)
+- [x] Image picker fallback: "Choose from library" button
+- [x] Uses `uploadSessionMedia` from `mobile/src/services/media.ts`
 
-### 13. Mobile – Profile Screen (Tab 3: Profile)
+### 14. Mobile – Profile Screen (Tab 2: Profile)
 
-Replace stub in `mobile/app/(tabs)/profile.tsx`:
+`mobile/app/(tabs)/profile.tsx`:
 
 - [x] Fetch `GET /api/sitters/me` and display profile
-- [ ] Editable fields: name, bio, location
-- [ ] Profile photo: tap to pick from library → upload to Cloudinary → `PATCH /api/sitters/me`
+- [x] Editable fields: name, bio, location, phone
+- [x] Profile photo: tap to pick from library → upload to Cloudinary → `PATCH /api/sitters/me`
 - [x] Sign out button
-- [ ] Display count of public sessions (portfolio size)
 
-### 14. Mobile – Owner Feed (Web/Deep Link View)
+### 15. Mobile – Owner Feed (Web/Deep Link View)
 
 Create `mobile/app/s/[shareLink].tsx` (Expo Router handles deep link `tailtimes://s/:shareLink`):
 
@@ -246,20 +243,22 @@ Create `mobile/app/s/[shareLink].tsx` (Expo Router handles deep link `tailtimes:
 - [ ] Video tap → play inline
 - [ ] "Powered by TailTimes" footer (subtle branding)
 
-### 15. Shared Types
+### 16. Shared Types
 
 Create `shared/types/index.ts`:
 
-- [ ] `Sitter` – mirrors DB sitters table (minus firebaseUid)
-- [ ] `Session` – mirrors DB sessions table
-- [ ] `Update` – mirrors DB updates table
-- [ ] `SessionWithUpdates` – Session + updates[]
-- [ ] `PublicSessionFeed` – owner-safe response type from `GET /api/share/:shareLink`
-- [ ] `CreateSessionInput`, `CreateUpdateInput`, etc. – request body types
-- [ ] Set up `shared/package.json` with `"name": "@tailtimes/shared"`
-- [ ] Reference from backend and mobile `package.json` as a local workspace dependency
+- [x] `Sitter` – mirrors DB sitters table (minus firebaseUid)
+- [x] `Session` – mirrors DB sessions table
+- [x] `Update` – mirrors DB updates table
+- [x] `SessionWithUpdates` – Session + updates[]
+- [x] `PublicSessionFeed` – owner-safe response type from `GET /api/share/:shareLink`
+- [x] `CreateSessionInput`, `CreateUpdateInput`, etc. – request body types
+- [x] Set up `shared/package.json` with `"name": "@tailtimes/shared"`
+- [x] Reference from backend and mobile `package.json` as a local workspace dependency
+  - [x] Mobile and web now consume the shared types through TypeScript path aliases
+  - [x] Backend route responses now map explicitly into the shared API contracts
 
-### 16. End-to-End Testing & Verification
+### 17. End-to-End Testing & Verification
 
 - [x] Start backend: `cd backend && npm run dev` – confirm `/health` returns 200
 - [x] Run DB seed: `npm run db:seed` – verify seed data in DB
@@ -271,26 +270,28 @@ Create `shared/types/index.ts`:
 - [~] Walk through core sitter flow in simulator:
   - [x] auth screen renders
   - [x] sign-in path succeeds after Firebase Auth setup
-  - [x] sessions list loads from the backend
+  - [x] sessions list loads from the backend (with quick-capture icons on active sessions)
   - [x] session creation succeeds
-  - [x] session detail renders
-  - [ ] capture/upload still pending
+  - [x] session detail renders (with prominent capture button + compact share link)
+  - [x] contextual capture screen opens from session detail with correct pet context
+  - [x] capture/upload UI wired and bundled successfully
 - [ ] Verify upload completes in under 3 seconds on WiFi (core success metric)
 
-### 17. Current Temporary Workarounds
+### 18. Current Temporary Workarounds
 
 - [x] Backend now loads `.env` directly via `dotenv/config`, so local dev no longer depends on `source .env` shell parsing
 - [x] Backend binds to `0.0.0.0` by default, which allows Expo Go / simulator traffic from the local network
-- [x] Mobile auth/session validation was completed in the iOS Simulator using dev-only shortcuts for demo auth and demo session creation
+- [x] Mobile auth/session validation was completed in the iOS Simulator before removing the earlier dev-only shortcuts for demo auth and demo session creation
 - [x] Root/auth/tabs layouts currently use `Slot` instead of native Expo Router `Stack` / `Tabs` because Expo Go is still crashing on `RNSSafeAreaView` / `RNSScreen`
-- [ ] Remove the dev-only validation helpers after the native navigator runtime is stabilized
+- [x] The dev-only auto-login and auto-session creation helpers have now been removed
+- [x] Tabs currently use a stable custom bottom navigation shell while the Expo Go native-screen mismatch remains unresolved
+- [x] Expo Go on iPhone currently uses the stable system-camera fallback because the embedded `expo-camera` view does not mount reliably there without a more native build workflow
 
 ---
 
 ## Key Constraints to Respect
 
 - **No auth for owners** – `GET /api/share/:shareLink` must never require a token
-- **Default private** – `isPublic` defaults to `false` on sessions and updates
-- **Minimize friction** – camera screen must be the default capture experience, not image picker
+- **Minimize friction** – contextual capture (from session detail) must be the default experience, not a generic camera tab
 - **Upload < 3 seconds** – use Cloudinary's existing `uploadMedia()` with streaming; do not buffer entire file in memory first
 - **Idempotent sitter creation** – `POST /api/sitters` must upsert so re-installing the app doesn't break anything

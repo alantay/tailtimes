@@ -9,10 +9,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/context/AuthContext';
 
 export default function SignupScreen() {
   const { signUp } = useAuth();
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,7 +39,13 @@ export default function SignupScreen() {
       behavior={Platform.select({ ios: 'padding', default: undefined })}
       className="flex-1 bg-white"
     >
-      <View className="flex-1 justify-center px-6">
+      <View
+        className="flex-1 justify-center px-6"
+        style={{
+          paddingTop: insets.top + 24,
+          paddingBottom: insets.bottom + 24,
+        }}
+      >
         <Text className="text-sm font-semibold uppercase tracking-[2px] text-green-700">TailTimes</Text>
         <Text className="mt-3 text-4xl font-bold text-gray-900">Create your sitter account</Text>
         <Text className="mt-3 text-base leading-6 text-gray-600">

@@ -19,7 +19,6 @@ const storeMediaSchema = z.object({
   mediaUrl: z.string().url(),
   type: z.enum(['photo', 'video']),
   caption: z.string().optional(),
-  isPublic: z.boolean().optional().default(false),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -53,7 +52,7 @@ const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'Invalid request', details: parsed.error.flatten() });
       }
 
-      const { sessionId, cloudinaryPublicId, mediaUrl, type, caption, isPublic, metadata } = parsed.data;
+      const { sessionId, cloudinaryPublicId, mediaUrl, type, caption, metadata } = parsed.data;
 
       // Session ownership is validated in the session-updates route.
       // This endpoint is intentionally thin — session routes handle the DB writes.

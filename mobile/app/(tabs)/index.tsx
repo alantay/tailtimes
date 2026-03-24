@@ -1,63 +1,22 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/context/AuthContext';
-import { apiGet, apiPost } from '../../src/services/api';
+import { apiGet } from '../../src/services/api';
 import { SessionSummary } from '../../src/types/api';
-import { formatShortDate, normalizeDateInput } from '../../src/utils/formatDate';
+import { formatShortDate } from '../../src/utils/formatDate';
 
 export default function HomeScreen() {
   const { sitterProfile } = useAuth();
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const hasCreatedDemoSession = useRef(false);
+  const insets = useSafeAreaInsets();
   const sessionsQuery = useQuery({
     queryKey: ['sessions'],
     queryFn: () => apiGet<SessionSummary[]>('/api/sessions'),
   });
-
-  async function handleCreateDemoSession() {
-    const now = new Date();
-    const today = now.toISOString().slice(0, 10);
-    const normalizedStartDate = normalizeDateInput(today);
-
-    if (!normalizedStartDate) {
-      throw new Error('Could not prepare a valid demo start date');
-    }
-
-    const demoSession = await apiPost<SessionSummary>('/api/sessions', {
-      petName: `Mochi ${now.getHours()}${now.getMinutes()}`,
-      petType: 'dog',
-      ownerName: 'Jamie Chen',
-      ownerContact: '+1-555-0100',
-      startDate: normalizedStartDate,
-      notes: 'Created from the in-app dev shortcut for simulator validation.',
-    });
-
-    await queryClient.invalidateQueries({ queryKey: ['sessions'] });
-    router.push(`/sessions/${demoSession.id}`);
-  }
-
-  useEffect(() => {
-    if (
-      !__DEV__ ||
-      hasCreatedDemoSession.current ||
-      sessionsQuery.isPending ||
-      sessionsQuery.isError ||
-      !sessionsQuery.data ||
-      sessionsQuery.data.length > 0
-    ) {
-      return;
-    }
-
-    hasCreatedDemoSession.current = true;
-    void handleCreateDemoSession().catch((error) => {
-      console.error('Failed to create demo session', error);
-      hasCreatedDemoSession.current = false;
-    });
-  }, [sessionsQuery.data, sessionsQuery.isError, sessionsQuery.isPending]);
 
   if (sessionsQuery.isPending) {
     return (
@@ -86,18 +45,44 @@ export default function HomeScreen() {
       <FlatList
         data={sessions}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 24, gap: 16, paddingBottom: 120 }}
+        contentContainerStyle={{
+          padding: 24,
+          paddingTop: insets.top + 24,
+          gap: 16,
+          paddingBottom: insets.bottom + 80,
+        }}
         ListHeaderComponent={
-          <View className="mb-4 gap-3">
-            <Text className="text-sm font-semibold uppercase tracking-[2px] text-green-700">
-              TailTimes
-            </Text>
-            <Text className="text-4xl font-bold text-gray-900">
-              {sitterProfile ? `Hi, ${sitterProfile.name}` : 'Your sessions'}
-            </Text>
-            <Text className="text-base leading-6 text-gray-600">
-              Active boarding timelines, owner links, and update history all in one place.
-            </Text>
+          <View className="mb-4 gap-4">
+            <View className="gap-3">
+              <Text className="text-sm font-semibold uppercase tracking-[2px] text-green-700">
+                TailTimes
+              </Text>
+              <Text className="text-4xl font-bold text-gray-900">
+                {sitterProfile ? `Hi, ${sitterProfile.name}` : 'Your sessions'}
+              </Text>
+            </View>
+
+            {sessions.length > 0 ? (
+              <Pressable
+                onPress={() => router.push('/sessions/new')}
+                style={{
+                  alignSelf: 'flex-start',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                }}
+              >
+                <Ionicons name="add" size={18} color="#374151" />
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#374151' }}>
+                  New session
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         }
         ListEmptyComponent={
@@ -112,39 +97,88 @@ export default function HomeScreen() {
             >
               <Text className="font-semibold text-white">Create a session</Text>
             </Pressable>
-            {__DEV__ ? (
-              <Pressable
-                onPress={handleCreateDemoSession}
-                className="mt-3 self-start rounded-2xl border border-green-200 px-5 py-3"
-              >
-                <Text className="font-semibold text-green-700">Create a demo session</Text>
-              </Pressable>
-            ) : null}
           </View>
         }
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push(`/sessions/${item.id}`)}
             className="rounded-3xl border border-gray-200 px-5 py-5"
+            style={{
+              backgroundColor: item.isActive ? '#ffffff' : '#f9fafb',
+            }}
           >
-            <Text className="text-xs font-semibold uppercase tracking-[2px] text-green-700">
-              {item.petType}
-            </Text>
-            <Text className="mt-2 text-2xl font-bold text-gray-900">{item.petName}</Text>
-            <Text className="mt-1 text-base text-gray-600">Owner: {item.ownerName}</Text>
-            <Text className="mt-4 text-sm text-gray-500">
-              Starts {formatShortDate(item.startDate)} • {item.stats.totalUpdates} updates
-            </Text>
+            <View className="flex-row items-start justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-xs font-semibold uppercase tracking-[2px] text-green-700">
+                  {item.petType}
+                </Text>
+                <Text className="mt-2 text-2xl font-bold text-gray-900">{item.petName}</Text>
+                <Text className="mt-1 text-base text-gray-600">Owner: {item.ownerName}</Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {item.isActive ? (
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      router.push(`/sessions/${item.id}/capture`);
+                    }}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: '#16a34a',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="camera" size={20} color="#ffffff" />
+                  </Pressable>
+                ) : null}
+
+                <View
+                  className="rounded-full px-3 py-2"
+                  style={{ backgroundColor: item.isActive ? '#dcfce7' : '#e5e7eb' }}
+                >
+                  <Text
+                    className="text-xs font-semibold uppercase tracking-[1px]"
+                    style={{ color: item.isActive ? '#166534' : '#4b5563' }}
+                  >
+                    {item.isActive ? 'Live' : 'Archived'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View className="mt-4 flex-row flex-wrap gap-3">
+              <View className="rounded-2xl bg-gray-50 px-4 py-3">
+                <Text className="text-xs font-semibold uppercase tracking-[1px] text-gray-500">
+                  Starts
+                </Text>
+                <Text className="mt-1 text-sm font-semibold text-gray-900">
+                  {formatShortDate(item.startDate)}
+                </Text>
+              </View>
+              <View className="rounded-2xl bg-gray-50 px-4 py-3">
+                <Text className="text-xs font-semibold uppercase tracking-[1px] text-gray-500">
+                  Updates
+                </Text>
+                <Text className="mt-1 text-sm font-semibold text-gray-900">
+                  {item.stats.totalUpdates}
+                </Text>
+              </View>
+              <View className="rounded-2xl bg-gray-50 px-4 py-3">
+                <Text className="text-xs font-semibold uppercase tracking-[1px] text-gray-500">
+                  Last share
+                </Text>
+                <Text className="mt-1 text-sm font-semibold text-gray-900">
+                  {item.stats.lastUpdateAt ? formatShortDate(item.stats.lastUpdateAt) : 'Not yet'}
+                </Text>
+              </View>
+            </View>
           </Pressable>
         )}
       />
-
-      <Pressable
-        onPress={() => router.push('/sessions/new')}
-        className="absolute bottom-8 right-6 rounded-full bg-green-600 px-5 py-4 shadow"
-      >
-        <Text className="font-semibold text-white">New Session</Text>
-      </Pressable>
 
       <StatusBar style="auto" />
     </View>
