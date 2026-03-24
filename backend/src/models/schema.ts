@@ -26,7 +26,6 @@ export const sessions = pgTable('sessions', {
   endDate: timestamp('end_date'),
   shareLink: text('share_link').unique().notNull(), // for owners to view
   isActive: boolean('is_active').default(true),
-  isPublic: boolean('is_public').default(false), // for portfolio
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -39,7 +38,6 @@ export const updates = pgTable('updates', {
   mediaUrl: text('media_url'), // Cloudinary URL
   caption: text('caption'),
   metadata: jsonb('metadata'), // Cloudinary metadata, dimensions, etc
-  isPublic: boolean('is_public').default(false), // for portfolio
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

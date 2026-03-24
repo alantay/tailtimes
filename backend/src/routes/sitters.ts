@@ -1,8 +1,9 @@
-import { and, count, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../models/db.js';
-import { sessions, sitters } from '../models/schema.js';
+import { sitters } from '../models/schema.js';
+import type { PublicSitterProfile } from '../types/api.js';
 import { authenticateUser } from '../utils/auth-middleware.js';
 import { parseWithSchema } from '../utils/validate.js';
 
@@ -141,17 +142,11 @@ const sitterRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: 'Sitter not found' });
     }
 
-    const [counts] = await db
-      .select({
-        publicSessionCount: count(),
-      })
-      .from(sessions)
-      .where(and(eq(sessions.sitterId, id), eq(sessions.isPublic, true), eq(sessions.isActive, true)));
-
-    return {
+    const response: PublicSitterProfile = {
         ...sitter,
-        publicSessionCount: counts.publicSessionCount,
     };
+
+    return response;
   });
 };
 

@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -9,15 +9,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/context/AuthContext';
 
 export default function LoginScreen() {
   const { signIn, signInWithDemoAccount } = useAuth();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const hasAttemptedDemoSignIn = useRef(false);
 
   async function handleSubmit() {
     setError(null);
@@ -45,21 +46,18 @@ export default function LoginScreen() {
     }
   }
 
-  useEffect(() => {
-    if (!__DEV__ || hasAttemptedDemoSignIn.current) {
-      return;
-    }
-
-    hasAttemptedDemoSignIn.current = true;
-    void handleDemoSignIn();
-  }, []);
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.select({ ios: 'padding', default: undefined })}
       className="flex-1 bg-white"
     >
-      <View className="flex-1 justify-center px-6">
+      <View
+        className="flex-1 justify-center px-6"
+        style={{
+          paddingTop: insets.top + 24,
+          paddingBottom: insets.bottom + 24,
+        }}
+      >
         <Text className="text-sm font-semibold uppercase tracking-[2px] text-green-700">TailTimes</Text>
         <Text className="mt-3 text-4xl font-bold text-gray-900">Welcome back</Text>
         <Text className="mt-3 text-base leading-6 text-gray-600">

@@ -11,20 +11,18 @@ Pet sitters currently send updates via messaging apps, which:
 
 TailTimes provides:
 - A private timeline per pet boarding session
-- A clean, shareable link for owners
-- Automatic portfolio generation for sitters
+- A clean, shareable link for owners (opens in any browser — no app required)
 
 ## Core Loop
 
 1. Sitter uploads update
 2. Owner views via link
 3. Updates stored as history
-4. History builds portfolio
-5. Portfolio builds trust
-6. Trust leads to more bookings
+4. Owner shares experience with friends
+5. Trust leads to more bookings
 
 ## Differentiation
 
 - No login required for owners
 - Structured timeline instead of chat
-- Built-in portfolio generation
+- The owner feed itself is the best trust signal — when owners share it with friends, it speaks for itself

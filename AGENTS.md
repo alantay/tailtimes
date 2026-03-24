@@ -2,7 +2,7 @@ This file provides guidance to Claude Code (claude.ai/code) and Codex when worki
 
 For full product and technical context, see:
 - [`docs/product.md`](docs/product.md) — problem, solution, core loop, differentiation
-- [`docs/user_flows.md`](docs/user_flows.md) — sitter, owner, and portfolio flows
+- [`docs/user_flows.md`](docs/user_flows.md) — sitter and owner flows
 - [`docs/mvp_scope.md`](docs/mvp_scope.md) — in/out of scope, success criteria
 - [`docs/tech_decisions.md`](docs/tech_decisions.md) — stack rationale, implementation phases, ADRs
 
@@ -49,7 +49,6 @@ shared/          # TypeScript types shared across packages
 - **Auth**: Firebase email/password for sitters; owners access via share link in browser (no login)
 - **Upload**: Mobile uploads directly to Cloudinary via signed preset → calls backend to store URL in DB
 - **Owner feed**: Share link opens `web/` Next.js page — works in any browser, no app required
-- **Portfolio**: `isPublic` flag on updates opts them into portfolio (page rendered in Phase 2)
 - **State**: React Query for server state, React Context for auth state
 - **Styling**: NativeWind (Tailwind for React Native)
 
@@ -74,7 +73,9 @@ npm run db:reset     # Reset local DB
 - **LAN testing from Expo Go / Simulator**: when testing on a phone or simulator, `EXPO_PUBLIC_API_URL` in `mobile/.env` should point to your Mac's LAN IP (for example `http://192.168.x.x:3001`), not `http://localhost:3001`
 - **Backend host binding**: the Fastify server binds to `0.0.0.0` by default for local development so mobile clients on the same network can reach it
 - **Firebase prerequisite**: Firebase Authentication must be enabled with the `Email/Password` provider before sitter sign-in/sign-up can succeed
-- **Current mobile navigation caveat**: the temporary Milestone 1 validation flow uses `Slot`-based layouts in Expo Router because native `Stack` / `Tabs` are still crashing on `RNSSafeAreaView` / `RNSScreen` in Expo Go. Remove these workarounds once the native runtime mismatch is resolved.
+- **Current mobile navigation caveat**: the app currently uses a stable `Slot`-based Expo Router shell with a custom bottom tab bar because native `Stack` / `Tabs` still crash on `RNSSafeAreaView` / `RNSScreen` in Expo Go. The earlier dev-only auto-login and auto-session helpers have been removed; revisit native navigators later, likely with a dev build or a deeper `react-native-screens` fix.
+- **Contextual capture flow**: The camera is no longer a tab — capture is launched from within a session (Instagram-style: capture → compose with optional caption → send). The bottom nav has 2 tabs: Sessions and Profile. Capture screen is at `mobile/app/sessions/[id]/capture.tsx`.
+- **Current camera caveat**: Expo Go on iPhone does not expose the embedded `expo-camera` view reliably in this project, so the capture screen auto-launches the system camera as a fallback. Treat the embedded in-app camera as a future enhancement unless the project later adopts a paid Apple Developer + dev-build workflow.
 
 ## Environment Variables
 
@@ -87,6 +88,7 @@ FIREBASE_ADMIN_KEY=...
 
 # mobile/.env
 EXPO_PUBLIC_API_URL=http://localhost:3001
+EXPO_PUBLIC_OWNER_FEED_URL=http://localhost:3002
 EXPO_PUBLIC_FIREBASE_CONFIG=...
 EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET=...
 EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME=...

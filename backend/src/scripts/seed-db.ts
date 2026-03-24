@@ -41,7 +41,6 @@ async function main() {
     endDate: null,
     shareLink: SHARE_LINK,
     isActive: true,
-    isPublic: false,
     notes: 'Loves fetch, naps after lunch, and gets anxious during thunderstorms.',
     createdAt: now,
     updatedAt: now,
@@ -60,7 +59,6 @@ async function main() {
         height: 1200,
         format: 'jpg',
       },
-      isPublic: false,
       createdAt: firstUpdateAt,
     },
     {
@@ -75,7 +73,6 @@ async function main() {
         duration: 18,
         format: 'mp4',
       },
-      isPublic: true,
       createdAt: secondUpdateAt,
     },
   ];
@@ -114,7 +111,6 @@ async function main() {
           endDate: sampleSession.endDate,
           shareLink: sampleSession.shareLink,
           isActive: sampleSession.isActive,
-          isPublic: sampleSession.isPublic,
           notes: sampleSession.notes,
           updatedAt: now,
         },
@@ -132,7 +128,6 @@ async function main() {
             mediaUrl: sampleUpdate.mediaUrl,
             caption: sampleUpdate.caption,
             metadata: sampleUpdate.metadata,
-            isPublic: sampleUpdate.isPublic,
             createdAt: sampleUpdate.createdAt,
           },
         });

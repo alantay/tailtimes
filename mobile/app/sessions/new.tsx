@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppLoadingScreen from '../../src/components/AppLoadingScreen';
 import { useAuth } from '../../src/context/AuthContext';
 import { apiPost } from '../../src/services/api';
@@ -23,6 +24,7 @@ export default function NewSessionScreen() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [petName, setPetName] = useState('');
   const [petType, setPetType] = useState<(typeof petTypes)[number]>('dog');
   const [ownerName, setOwnerName] = useState('');
@@ -85,7 +87,23 @@ export default function NewSessionScreen() {
       behavior={Platform.select({ ios: 'padding', default: undefined })}
       style={{ flex: 1, backgroundColor: '#ffffff' }}
     >
-      <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
+      <ScrollView
+        contentContainerStyle={{
+          padding: 24,
+          paddingTop: insets.top + 24,
+          paddingBottom: insets.bottom + 24,
+          gap: 16,
+        }}
+      >
+        <Pressable
+          onPress={() => router.replace('/(tabs)')}
+          style={{ alignSelf: 'flex-start', paddingVertical: 6 }}
+        >
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#16a34a' }}>
+            Back to sessions
+          </Text>
+        </Pressable>
+
         <Text style={{ fontSize: 30, fontWeight: '700', color: '#111827' }}>Create a session</Text>
         <Text style={{ fontSize: 16, color: '#6b7280', lineHeight: 24 }}>
           Start a new boarding timeline and get the owner share link ready for the first update.
