@@ -1,16 +1,50 @@
-import { asc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../models/db.js';
 import { sessions, sitters, updates } from '../models/schema.js';
-import type { PublicSessionFeed, PublicSessionUpdate } from '../types/api.js';
+import type { PublicSessionFeed, PublicSessionUpdate, SessionUpdateTag } from '../types/api.js';
 import { parseWithSchema } from '../utils/validate.js';
+
+const sessionUpdateTags = ['walks', 'food', 'lounging', 'sleeping', 'misc'] as const;
+
+function parseUpdateTag(value: unknown): SessionUpdateTag | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  return sessionUpdateTags.includes(value as (typeof sessionUpdateTags)[number])
+    ? (value as SessionUpdateTag)
+    : null;
+}
+
+function getUpdateTags(metadata: unknown): SessionUpdateTag[] | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  if ('tags' in metadata && Array.isArray(metadata.tags)) {
+    const tags = metadata.tags
+      .map((value) => parseUpdateTag(value))
+      .filter((value): value is SessionUpdateTag => Boolean(value));
+
+    return tags.length > 0 ? [...new Set(tags)] : null;
+  }
+
+  if ('tag' in metadata) {
+    const tag = parseUpdateTag(metadata.tag);
+    return tag ? [tag] : null;
+  }
+
+  return null;
+}
 
 function toPublicSessionUpdate(record: {
   id: string;
   type: string;
   mediaUrl: string | null;
   caption: string | null;
+  metadata: unknown;
   createdAt: Date;
 }): PublicSessionUpdate {
   return {
@@ -18,6 +52,7 @@ function toPublicSessionUpdate(record: {
     type: record.type === 'video' ? 'video' : 'photo',
     mediaUrl: record.mediaUrl ?? '',
     caption: record.caption,
+    tags: getUpdateTags(record.metadata),
     createdAt: record.createdAt.toISOString(),
   };
 }
@@ -60,12 +95,13 @@ const ownerRoutes: FastifyPluginAsync = async (fastify) => {
         type: updates.type,
         mediaUrl: updates.mediaUrl,
         caption: updates.caption,
+        metadata: updates.metadata,
         createdAt: updates.createdAt,
       })
       .from(updates)
       .innerJoin(sessions, eq(sessions.id, updates.sessionId))
       .where(eq(sessions.shareLink, shareLink))
-      .orderBy(asc(updates.createdAt));
+      .orderBy(desc(updates.createdAt));
 
     const response: PublicSessionFeed = {
       session: {

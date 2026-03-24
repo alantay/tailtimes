@@ -1,4 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -16,9 +18,22 @@ import AppLoadingScreen from '../../src/components/AppLoadingScreen';
 import { useAuth } from '../../src/context/AuthContext';
 import { apiPost } from '../../src/services/api';
 import { SessionSummary } from '../../src/types/api';
-import { normalizeDateInput } from '../../src/utils/formatDate';
 
 const petTypes = ['dog', 'cat', 'other'] as const;
+
+function toSessionDateIso(date: Date) {
+  return new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0)
+  ).toISOString();
+}
+
+function toDisplayDate(date: Date) {
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
 
 export default function NewSessionScreen() {
   const { user, isLoading } = useAuth();
@@ -29,7 +44,13 @@ export default function NewSessionScreen() {
   const [petType, setPetType] = useState<(typeof petTypes)[number]>('dog');
   const [ownerName, setOwnerName] = useState('');
   const [ownerContact, setOwnerContact] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => new Date());
+  const [endDate, setEndDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow;
+  });
+  const [activeDateField, setActiveDateField] = useState<'start' | 'end' | null>(null);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -43,10 +64,8 @@ export default function NewSessionScreen() {
         throw new Error('Owner name is required');
       }
 
-      const normalizedStartDate = normalizeDateInput(startDate);
-
-      if (!normalizedStartDate) {
-        throw new Error('Start date is required');
+      if (endDate < startDate) {
+        throw new Error('End date must be on or after start date');
       }
 
       return apiPost<SessionSummary>('/api/sessions', {
@@ -54,7 +73,8 @@ export default function NewSessionScreen() {
         petType,
         ownerName: ownerName.trim(),
         ownerContact: ownerContact.trim() || undefined,
-        startDate: normalizedStartDate,
+        startDate: toSessionDateIso(startDate),
+        endDate: toSessionDateIso(endDate),
         notes: notes.trim() || undefined,
       });
     },
@@ -80,6 +100,33 @@ export default function NewSessionScreen() {
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Could not create session');
     }
+  }
+
+  function handleDateChange(event: DateTimePickerEvent, selectedDate?: Date) {
+    if (Platform.OS === 'android') {
+      setActiveDateField(null);
+    }
+
+    if (!selectedDate || event.type === 'dismissed' || !activeDateField) {
+      return;
+    }
+
+    if (activeDateField === 'start') {
+      setStartDate(selectedDate);
+
+      if (selectedDate > endDate) {
+        setEndDate(selectedDate);
+      }
+
+      return;
+    }
+
+    if (selectedDate < startDate) {
+      setEndDate(startDate);
+      return;
+    }
+
+    setEndDate(selectedDate);
   }
 
   return (
@@ -181,20 +228,75 @@ export default function NewSessionScreen() {
           }}
         />
 
-        <TextInput
-          placeholder="Start date (YYYY-MM-DD)"
-          value={startDate}
-          onChangeText={setStartDate}
-          autoCapitalize="none"
-          style={{
-            borderWidth: 1,
-            borderColor: '#e5e7eb',
-            borderRadius: 16,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-            fontSize: 16,
-          }}
-        />
+        <View style={{ gap: 10 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#374151' }}>Session dates</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Pressable
+              onPress={() => setActiveDateField('start')}
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: '#e5e7eb',
+                borderRadius: 16,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280' }}>Start date</Text>
+              <Text style={{ marginTop: 4, fontSize: 16, color: '#111827' }}>{toDisplayDate(startDate)}</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setActiveDateField('end')}
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: '#e5e7eb',
+                borderRadius: 16,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280' }}>End date</Text>
+              <Text style={{ marginTop: 4, fontSize: 16, color: '#111827' }}>{toDisplayDate(endDate)}</Text>
+            </Pressable>
+          </View>
+
+          {activeDateField ? (
+            <View
+              style={{
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: '#e5e7eb',
+                backgroundColor: '#f9fafb',
+                padding: 12,
+                gap: 8,
+              }}
+            >
+              <DateTimePicker
+                value={activeDateField === 'start' ? startDate : endDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+                minimumDate={activeDateField === 'end' ? startDate : undefined}
+              />
+              {Platform.OS === 'ios' ? (
+                <Pressable
+                  onPress={() => setActiveDateField(null)}
+                  style={{
+                    alignSelf: 'flex-end',
+                    borderRadius: 999,
+                    backgroundColor: '#16a34a',
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#ffffff' }}>Done</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
 
         <TextInput
           placeholder="Notes (optional)"

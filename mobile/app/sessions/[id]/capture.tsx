@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Video, ResizeMode } from 'expo-av';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { Camera, CameraType, CameraView } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import * as VideoThumbnails from 'expo-video-thumbnails';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Component, type ReactNode, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -21,54 +20,26 @@ import {
   uploadSessionMedia,
   type UploadableAsset,
 } from '../../../src/services/media';
-import { SessionDetail } from '../../../src/types/api';
+import { SessionDetail, SessionUpdateTag } from '../../../src/types/api';
 
 const mediaTypes: ImagePicker.MediaType[] = ['images', 'videos'];
-const supportsEmbeddedCamera = Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
-
-class CameraSurfaceBoundary extends Component<
-  { children: ReactNode; onError: (error: Error) => void },
-  { hasError: boolean }
-> {
-  constructor(props: { children: ReactNode; onError: (error: Error) => void }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error) {
-    this.props.onError(error);
-  }
-
-  render() {
-    if (this.state.hasError) return null;
-    return this.props.children;
-  }
-}
+const updateTags: SessionUpdateTag[] = ['walks', 'food', 'lounging', 'sleeping', 'misc'];
 
 export default function CaptureScreen() {
-  const { id: sessionId } = useLocalSearchParams<{ id: string }>();
+  const { id: sessionId, intent } = useLocalSearchParams<{
+    id: string;
+    intent?: 'camera' | 'library';
+  }>();
   const router = useRouter();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
-  const cameraRef = useRef<CameraView | null>(null);
 
   const [selectedAsset, setSelectedAsset] = useState<UploadableAsset | null>(null);
   const [caption, setCaption] = useState('');
+  const [selectedTags, setSelectedTags] = useState<SessionUpdateTag[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPreparingMedia, setIsPreparingMedia] = useState(false);
-  const [cameraPermissionGranted, setCameraPermissionGranted] = useState<boolean | null>(null);
-  const [microphonePermissionGranted, setMicrophonePermissionGranted] = useState<boolean | null>(
-    null
-  );
-  const [cameraReady, setCameraReady] = useState(false);
-  const [cameraFacing, setCameraFacing] = useState<CameraType>('back');
-  const [captureMode, setCaptureMode] = useState<'picture' | 'video'>('picture');
-  const [isRecording, setIsRecording] = useState(false);
-  const [useEmbeddedCamera, setUseEmbeddedCamera] = useState(supportsEmbeddedCamera);
+  const [videoThumbnailUri, setVideoThumbnailUri] = useState<string | null>(null);
   const hasAutoLaunched = useRef(false);
 
   const sessionQuery = useQuery({
@@ -79,21 +50,55 @@ export default function CaptureScreen() {
 
   const session = sessionQuery.data;
 
-  // Request camera permission on mount
   useEffect(() => {
-    void Camera.requestCameraPermissionsAsync().then((permission) => {
-      setCameraPermissionGranted(permission.granted);
-    });
-  }, []);
-
-  // Auto-launch system camera on Expo Go
-  useEffect(() => {
-    if (useEmbeddedCamera || hasAutoLaunched.current || !session || selectedAsset || isPreparingMedia) {
+    if (
+      hasAutoLaunched.current ||
+      !session ||
+      selectedAsset ||
+      isPreparingMedia ||
+      !intent
+    ) {
       return;
     }
+
     hasAutoLaunched.current = true;
-    void pickMedia('camera');
-  }, [useEmbeddedCamera, session, selectedAsset, isPreparingMedia]);
+
+    if (intent === 'library') {
+      void pickMedia('library');
+      return;
+    }
+
+    void launchSystemCamera(mediaTypes);
+  }, [intent, isPreparingMedia, selectedAsset, session]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (selectedAsset?.type !== 'video' || !selectedAsset.uri) {
+      setVideoThumbnailUri(null);
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    void VideoThumbnails.getThumbnailAsync(selectedAsset.uri, {
+      time: 750,
+    })
+      .then((result) => {
+        if (!isCancelled) {
+          setVideoThumbnailUri(result.uri);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setVideoThumbnailUri(null);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedAsset?.type, selectedAsset?.uri]);
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
@@ -103,6 +108,7 @@ export default function CaptureScreen() {
         sessionId: sessionId!,
         asset: selectedAsset,
         caption,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
       });
     },
     onSuccess: async () => {
@@ -117,39 +123,47 @@ export default function CaptureScreen() {
   function resetDraft() {
     setSelectedAsset(null);
     setCaption('');
+    setSelectedTags([]);
+    setVideoThumbnailUri(null);
   }
 
-  async function pickMedia(source: 'camera' | 'library') {
+  async function launchSystemCamera(cameraMediaTypes: ImagePicker.MediaType[]) {
     setError(null);
     setIsPreparingMedia(true);
 
     try {
-      if (source === 'camera') {
-        if (!useEmbeddedCamera) {
-          const permission = await ImagePicker.requestCameraPermissionsAsync();
-          if (!permission.granted) throw new Error('Camera access is required to capture media');
-
-          const result = await ImagePicker.launchCameraAsync({
-            mediaTypes,
-            cameraType:
-              cameraFacing === 'back' ? ImagePicker.CameraType.back : ImagePicker.CameraType.front,
-            quality: 0.7,
-            videoMaxDuration: 60,
-            allowsEditing: false,
-          });
-
-          if (!result.canceled) {
-            setSelectedAsset(toUploadableAsset(result.assets[0]));
-          }
-          return;
-        }
-
-        const permission = await Camera.requestCameraPermissionsAsync();
-        setCameraPermissionGranted(permission.granted);
-        if (!permission.granted) throw new Error('Camera access is required to capture media');
-        return;
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        throw new Error('Camera access is required to capture media');
       }
 
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: cameraMediaTypes,
+        quality: 0.7,
+        videoMaxDuration: 60,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled) {
+        setSelectedAsset(toUploadableAsset(result.assets[0]));
+      }
+    } catch (captureError) {
+      setError(captureError instanceof Error ? captureError.message : 'Could not capture media');
+    } finally {
+      setIsPreparingMedia(false);
+    }
+  }
+
+  async function pickMedia(source: 'camera' | 'library') {
+    if (source === 'camera') {
+      await launchSystemCamera(mediaTypes);
+      return;
+    }
+
+    setError(null);
+    setIsPreparingMedia(true);
+
+    try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) throw new Error('Photo library access is required to choose media');
 
@@ -166,67 +180,6 @@ export default function CaptureScreen() {
       setError(pickerError instanceof Error ? pickerError.message : 'Could not prepare media');
     } finally {
       setIsPreparingMedia(false);
-    }
-  }
-
-  async function handleCapture() {
-    if (!cameraRef.current || !cameraReady) {
-      setError('Camera is still getting ready');
-      return;
-    }
-
-    setError(null);
-    setIsPreparingMedia(true);
-
-    try {
-      if (captureMode === 'video') {
-        const permission =
-          microphonePermissionGranted === true
-            ? { granted: true }
-            : await Camera.requestMicrophonePermissionsAsync();
-
-        setMicrophonePermissionGranted(permission.granted);
-        if (!permission.granted) throw new Error('Microphone access is required to record video');
-
-        if (isRecording) {
-          cameraRef.current.stopRecording();
-          return;
-        }
-
-        setIsRecording(true);
-        const recorded = await cameraRef.current.recordAsync({ maxDuration: 60 });
-
-        if (recorded?.uri) {
-          setSelectedAsset({
-            uri: recorded.uri,
-            type: 'video',
-            mimeType: 'video/mp4',
-            fileName: `tailtimes-video-${Date.now()}.mp4`,
-          });
-        }
-        return;
-      }
-
-      const picture = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
-        shutterSound: false,
-      });
-
-      if (picture?.uri) {
-        setSelectedAsset({
-          uri: picture.uri,
-          type: 'photo',
-          mimeType: 'image/jpeg',
-          width: picture.width,
-          height: picture.height,
-          fileName: `tailtimes-photo-${Date.now()}.jpg`,
-        });
-      }
-    } catch (captureError) {
-      setError(captureError instanceof Error ? captureError.message : 'Could not capture media');
-    } finally {
-      setIsPreparingMedia(false);
-      setIsRecording(false);
     }
   }
 
@@ -284,13 +237,51 @@ export default function CaptureScreen() {
 
         <View style={{ backgroundColor: '#000000' }}>
           {selectedAsset.type === 'video' ? (
-            <Video
-              source={{ uri: selectedAsset.uri }}
-              useNativeControls
-              isLooping
-              resizeMode={ResizeMode.COVER}
-              style={{ width: '100%', height: 380 }}
-            />
+            <View
+              style={{
+                width: '100%',
+                height: 380,
+                backgroundColor: '#111827',
+                overflow: 'hidden',
+              }}
+            >
+              {videoThumbnailUri ? (
+                <Image
+                  source={{ uri: videoThumbnailUri }}
+                  resizeMode="cover"
+                  style={{ width: '100%', height: '100%' }}
+                />
+              ) : null}
+
+              <View
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12,
+                  backgroundColor: videoThumbnailUri ? 'rgba(17,24,39,0.30)' : '#111827',
+                  paddingHorizontal: 24,
+                }}
+              >
+                <View
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 36,
+                    backgroundColor: 'rgba(255,255,255,0.16)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="videocam" size={30} color="#ffffff" />
+                </View>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: '#ffffff' }}>Video ready</Text>
+                <Text style={{ textAlign: 'center', fontSize: 14, color: '#d1d5db' }}>
+                  Preview frame shown here. Full playback is available after adding it to the session.
+                </Text>
+              </View>
+            </View>
           ) : (
             <Image
               source={{ uri: selectedAsset.uri }}
@@ -301,10 +292,51 @@ export default function CaptureScreen() {
         </View>
 
         <View style={{ padding: 20, gap: 16 }}>
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Tags (optional)</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {updateTags.map((option) => {
+                const isSelected = selectedTags.includes(option);
+
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() =>
+                      setSelectedTags((current) =>
+                        current.includes(option)
+                          ? current.filter((tag) => tag !== option)
+                          : [...current, option]
+                      )
+                    }
+                    style={{
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: isSelected ? '#16a34a' : '#d1d5db',
+                      backgroundColor: isSelected ? '#f0fdf4' : '#ffffff',
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: '600',
+                        color: isSelected ? '#166534' : '#4b5563',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {option}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
           <TextInput
             value={caption}
             onChangeText={setCaption}
-            placeholder="Write a caption..."
+            placeholder="Write a caption (optional)"
             placeholderTextColor="#9ca3af"
             multiline
             textAlignVertical="top"
@@ -329,7 +361,11 @@ export default function CaptureScreen() {
             <Pressable
               onPress={() => {
                 resetDraft();
-                if (!useEmbeddedCamera) void pickMedia('camera');
+                if (intent === 'library') {
+                  void pickMedia('library');
+                } else {
+                  void launchSystemCamera(mediaTypes);
+                }
               }}
               style={{
                 flex: 1,
@@ -359,7 +395,7 @@ export default function CaptureScreen() {
                 <ActivityIndicator color="#ffffff" />
               ) : (
                 <Text style={{ fontSize: 16, fontWeight: '600', color: '#ffffff' }}>
-                  Send to {session.ownerName}
+                  Add to session
                 </Text>
               )}
             </Pressable>
@@ -393,159 +429,32 @@ export default function CaptureScreen() {
         </View>
       </View>
 
-      {useEmbeddedCamera ? (
-        <View style={{ borderRadius: 28, overflow: 'hidden', marginHorizontal: 20, backgroundColor: '#000000' }}>
-          {cameraPermissionGranted ? (
-            <CameraSurfaceBoundary
-              onError={(cameraError) => {
-                setUseEmbeddedCamera(false);
-                setError(
-                  cameraError.message ||
-                    'The in-app camera hit a render error. Opening the phone camera instead.'
-                );
-              }}
-            >
-              <CameraView
-                ref={cameraRef}
-                active
-                animateShutter
-                facing={cameraFacing}
-                mode={captureMode}
-                mute={captureMode !== 'video'}
-                onCameraReady={() => setCameraReady(true)}
-                onMountError={(mountError) => {
-                  setUseEmbeddedCamera(false);
-                  setError(
-                    mountError.message ||
-                      'The in-app camera could not mount. Opening the phone camera instead.'
-                  );
-                }}
-                style={{ width: '100%', height: 420 }}
-              />
-            </CameraSurfaceBoundary>
-          ) : (
-            <View style={{ alignItems: 'center', padding: 40 }}>
-              <Text style={{ fontSize: 18, fontWeight: '600', color: '#ffffff' }}>
-                Camera access needed
-              </Text>
-              <Pressable
-                disabled={isPreparingMedia}
-                onPress={() => pickMedia('camera')}
-                style={{
-                  marginTop: 20,
-                  minHeight: 48,
-                  minWidth: 160,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 16,
-                  backgroundColor: '#16a34a',
-                }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '600', color: '#ffffff' }}>
-                  Enable camera
-                </Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-      ) : null}
+      <View
+        style={{
+          marginHorizontal: 20,
+          borderRadius: 28,
+          backgroundColor: '#f9fafb',
+          borderWidth: 1,
+          borderColor: '#e5e7eb',
+          paddingHorizontal: 22,
+          paddingVertical: 24,
+          gap: 10,
+        }}
+      >
+        <Text style={{ fontSize: 22, fontWeight: '700', color: '#111827' }}>Add an update</Text>
+        <Text style={{ fontSize: 15, lineHeight: 22, color: '#6b7280' }}>
+          Capture update opens your phone camera so you can switch between photo and video there.
+        </Text>
+      </View>
 
       <View style={{ paddingHorizontal: 20, gap: 12 }}>
-        {useEmbeddedCamera ? (
-          <>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Pressable
-                onPress={() => setCaptureMode('picture')}
-                style={{
-                  flex: 1,
-                  borderRadius: 16,
-                  paddingVertical: 12,
-                  backgroundColor: captureMode === 'picture' ? '#16a34a' : '#f3f4f6',
-                  alignItems: 'center',
-                }}
-              >
-                <Text
-                  style={{
-                    fontWeight: '600',
-                    color: captureMode === 'picture' ? '#ffffff' : '#374151',
-                  }}
-                >
-                  Photo
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setCaptureMode('video')}
-                style={{
-                  flex: 1,
-                  borderRadius: 16,
-                  paddingVertical: 12,
-                  backgroundColor: captureMode === 'video' ? '#16a34a' : '#f3f4f6',
-                  alignItems: 'center',
-                }}
-              >
-                <Text
-                  style={{
-                    fontWeight: '600',
-                    color: captureMode === 'video' ? '#ffffff' : '#374151',
-                  }}
-                >
-                  Video
-                </Text>
-              </Pressable>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Pressable
-                onPress={() =>
-                  setCameraFacing((current) => (current === 'back' ? 'front' : 'back'))
-                }
-                style={{
-                  flex: 1,
-                  minHeight: 52,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: '#d1d5db',
-                }}
-              >
-                <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>
-                  Flip camera
-                </Text>
-              </Pressable>
-              <Pressable
-                disabled={isPreparingMedia || !cameraPermissionGranted}
-                onPress={handleCapture}
-                style={{
-                  flex: 1,
-                  minHeight: 52,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 16,
-                  backgroundColor:
-                    captureMode === 'video' && isRecording ? '#dc2626' : '#16a34a',
-                }}
-              >
-                {isPreparingMedia ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#ffffff' }}>
-                    {captureMode === 'video'
-                      ? isRecording
-                        ? 'Stop recording'
-                        : 'Record video'
-                      : 'Take photo'}
-                  </Text>
-                )}
-              </Pressable>
-            </View>
-          </>
-        ) : (
+        <View style={{ flexDirection: 'row', gap: 12 }}>
           <Pressable
             disabled={isPreparingMedia}
-            onPress={() => pickMedia('camera')}
+            onPress={() => launchSystemCamera(mediaTypes)}
             style={{
-              minHeight: 56,
+              minWidth: 170,
+              minHeight: 52,
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: 16,
@@ -560,24 +469,25 @@ export default function CaptureScreen() {
               </Text>
             )}
           </Pressable>
-        )}
-
-        <Pressable
-          disabled={isPreparingMedia}
-          onPress={() => pickMedia('library')}
-          style={{
-            minHeight: 56,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: '#bbf7d0',
-          }}
-        >
-          <Text style={{ fontSize: 16, fontWeight: '600', color: '#15803d' }}>
-            Choose from library
-          </Text>
-        </Pressable>
+          <Pressable
+            disabled={isPreparingMedia}
+            onPress={() => pickMedia('library')}
+            style={{
+              flex: 1,
+              minHeight: 52,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: '#bbf7d0',
+              backgroundColor: '#f0fdf4',
+            }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: '600', color: '#15803d' }}>
+              Choose from gallery
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
       {error ? (

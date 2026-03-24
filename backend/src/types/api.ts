@@ -6,6 +6,8 @@ export type {
   PublicSessionUpdate,
   PublicSitterProfile,
   SessionDetail,
+  SessionStatus,
+  SessionUpdateTag,
   SessionStats,
   SessionSummary,
   SessionUpdate,

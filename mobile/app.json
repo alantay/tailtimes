@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TailTimes",
-    "slug": "tailtimes", 
+    "slug": "tailtimes",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,7 +24,7 @@
     "android": {
       "package": "com.tailtimes.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE", 
+        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -52,7 +52,9 @@
         {
           "photosPermission": "TailTimes needs photo library access to select and upload media."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ]
   }
 }

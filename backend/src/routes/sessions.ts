@@ -4,12 +4,45 @@ import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../models/db.js';
 import { sessionStats, sessions, sitters, updates } from '../models/schema.js';
-import type { SessionDetail, SessionSummary, SessionUpdate } from '../types/api.js';
+import type { SessionDetail, SessionStatus, SessionSummary, SessionUpdate, SessionUpdateTag } from '../types/api.js';
 import { authenticateUser } from '../utils/auth-middleware.js';
 import { parseWithSchema } from '../utils/validate.js';
 
+const sessionUpdateTags = ['walks', 'food', 'lounging', 'sleeping', 'misc'] as const;
+
 function toIsoString(value: Date | null | undefined) {
   return value ? value.toISOString() : null;
+}
+
+function parseUpdateTag(value: unknown): SessionUpdateTag | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  return sessionUpdateTags.includes(value as (typeof sessionUpdateTags)[number])
+    ? (value as SessionUpdateTag)
+    : null;
+}
+
+function getUpdateTags(metadata: unknown): SessionUpdateTag[] | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  if ('tags' in metadata && Array.isArray(metadata.tags)) {
+    const tags = metadata.tags
+      .map((value) => parseUpdateTag(value))
+      .filter((value): value is SessionUpdateTag => Boolean(value));
+
+    return tags.length > 0 ? [...new Set(tags)] : null;
+  }
+
+  if ('tag' in metadata) {
+    const tag = parseUpdateTag(metadata.tag);
+    return tag ? [tag] : null;
+  }
+
+  return null;
 }
 
 function toSessionUpdate(record: {
@@ -27,6 +60,7 @@ function toSessionUpdate(record: {
     type: record.type === 'video' ? 'video' : 'photo',
     mediaUrl: record.mediaUrl ?? '',
     caption: record.caption,
+    tags: getUpdateTags(record.metadata),
     metadata:
       record.metadata && typeof record.metadata === 'object'
         ? (record.metadata as Record<string, unknown>)
@@ -41,8 +75,19 @@ const createSessionSchema = z.object({
   ownerName: z.string().trim().min(1),
   ownerContact: z.string().trim().max(120).optional(),
   startDate: z.string().datetime(),
-  endDate: z.string().datetime().nullable().optional(),
+  endDate: z.string().datetime(),
   notes: z.string().trim().max(1000).optional(),
+}).superRefine((value, ctx) => {
+  const startDate = new Date(value.startDate);
+  const endDate = new Date(value.endDate);
+
+  if (endDate < startDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['endDate'],
+      message: 'End date must be on or after start date',
+    });
+  }
 });
 
 const updateSessionSchema = z
@@ -115,6 +160,8 @@ function formatSession(record: Awaited<ReturnType<typeof getOwnedSession>>): Ses
     return null;
   }
 
+  const status = computeSessionStatus(record.startDate, record.endDate, record.isActive ?? false);
+
   return {
     id: record.id,
     sitterId: record.sitterId,
@@ -126,6 +173,7 @@ function formatSession(record: Awaited<ReturnType<typeof getOwnedSession>>): Ses
     endDate: toIsoString(record.endDate),
     shareLink: record.shareLink,
     isActive: record.isActive ?? false,
+    status,
     notes: record.notes,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
@@ -136,6 +184,35 @@ function formatSession(record: Awaited<ReturnType<typeof getOwnedSession>>): Ses
       lastUpdateAt: toIsoString(record.lastUpdateAt),
     },
   };
+}
+
+function getUtcDayValue(value: Date) {
+  return Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+}
+
+function computeSessionStatus(
+  startDate: Date,
+  endDate: Date | null,
+  isActive: boolean
+): SessionStatus {
+  if (!isActive) {
+    return 'ended';
+  }
+
+  const today = new Date();
+  const todayValue = getUtcDayValue(today);
+  const startValue = getUtcDayValue(startDate);
+  const endValue = endDate ? getUtcDayValue(endDate) : null;
+
+  if (todayValue < startValue) {
+    return 'upcoming';
+  }
+
+  if (endValue !== null && todayValue > endValue) {
+    return 'ended';
+  }
+
+  return 'live';
 }
 
 const sessionRoutes: FastifyPluginAsync = async (fastify) => {
@@ -166,7 +243,7 @@ const sessionRoutes: FastifyPluginAsync = async (fastify) => {
           ownerName: body.ownerName,
           ownerContact: body.ownerContact,
           startDate: new Date(body.startDate),
-          endDate: body.endDate ? new Date(body.endDate) : null,
+          endDate: new Date(body.endDate),
           shareLink,
           notes: body.notes,
           updatedAt: now,

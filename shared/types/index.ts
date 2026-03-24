@@ -1,4 +1,6 @@
 export type MediaType = 'photo' | 'video';
+export type SessionStatus = 'upcoming' | 'live' | 'ended';
+export type SessionUpdateTag = 'walks' | 'food' | 'lounging' | 'sleeping' | 'misc';
 
 export interface SessionStats {
   totalUpdates: number;
@@ -38,6 +40,7 @@ export interface SessionSummary {
   endDate?: string | null;
   shareLink: string;
   isActive: boolean;
+  status: SessionStatus;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -50,6 +53,7 @@ export interface SessionUpdate {
   type: MediaType;
   mediaUrl: string;
   caption?: string | null;
+  tags?: SessionUpdateTag[] | null;
   metadata?: Record<string, unknown> | null;
   createdAt: string;
 }
@@ -63,6 +67,7 @@ export interface PublicSessionUpdate {
   type: MediaType;
   mediaUrl: string;
   caption?: string | null;
+  tags?: SessionUpdateTag[] | null;
   createdAt: string;
 }
 
@@ -103,7 +108,7 @@ export interface CreateSessionInput {
   ownerName: string;
   ownerContact?: string;
   startDate: string;
-  endDate?: string | null;
+  endDate: string;
   notes?: string;
 }
 
@@ -118,5 +123,6 @@ export interface CreateSessionUpdateInput {
   mediaUrl: string;
   type: MediaType;
   caption?: string;
+  tags?: SessionUpdateTag[];
   metadata?: Record<string, unknown>;
 }

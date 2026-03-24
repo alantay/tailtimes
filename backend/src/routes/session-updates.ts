@@ -4,9 +4,42 @@ import { z } from 'zod';
 import { db } from '../models/db.js';
 import { sessionStats, sessions, sitters, updates } from '../models/schema.js';
 import { CloudinaryService } from '../services/cloudinary.js';
-import type { SessionUpdate } from '../types/api.js';
+import type { SessionUpdate, SessionUpdateTag } from '../types/api.js';
 import { authenticateUser } from '../utils/auth-middleware.js';
 import { parseWithSchema } from '../utils/validate.js';
+
+const sessionUpdateTags = ['walks', 'food', 'lounging', 'sleeping', 'misc'] as const;
+
+function parseUpdateTag(value: unknown): SessionUpdateTag | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  return sessionUpdateTags.includes(value as (typeof sessionUpdateTags)[number])
+    ? (value as SessionUpdateTag)
+    : null;
+}
+
+function getUpdateTags(metadata: unknown): SessionUpdateTag[] | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  if ('tags' in metadata && Array.isArray(metadata.tags)) {
+    const tags = metadata.tags
+      .map((value) => parseUpdateTag(value))
+      .filter((value): value is SessionUpdateTag => Boolean(value));
+
+    return tags.length > 0 ? [...new Set(tags)] : null;
+  }
+
+  if ('tag' in metadata) {
+    const tag = parseUpdateTag(metadata.tag);
+    return tag ? [tag] : null;
+  }
+
+  return null;
+}
 
 function toSessionUpdate(record: {
   id: string;
@@ -23,6 +56,7 @@ function toSessionUpdate(record: {
     type: record.type === 'video' ? 'video' : 'photo',
     mediaUrl: record.mediaUrl ?? '',
     caption: record.caption,
+    tags: getUpdateTags(record.metadata),
     metadata:
       record.metadata && typeof record.metadata === 'object'
         ? (record.metadata as Record<string, unknown>)
@@ -45,6 +79,7 @@ const createSessionUpdateSchema = z.object({
   mediaUrl: z.string().url(),
   type: z.enum(['photo', 'video']),
   caption: z.string().trim().max(500).optional(),
+  tags: z.array(z.enum(sessionUpdateTags)).max(5).optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -101,6 +136,7 @@ const sessionUpdateRoutes: FastifyPluginAsync = async (fastify) => {
           metadata: {
             ...body.metadata,
             cloudinaryPublicId: body.cloudinaryPublicId,
+            ...(body.tags && body.tags.length > 0 ? { tags: [...new Set(body.tags)] } : {}),
           },
           createdAt: now,
         })
@@ -128,6 +164,7 @@ const sessionUpdateRoutes: FastifyPluginAsync = async (fastify) => {
       thumbnailUrl: CloudinaryService.generateThumbnail(body.cloudinaryPublicId),
       type: createdUpdate.type,
       caption: createdUpdate.caption,
+      tags: getUpdateTags(createdUpdate.metadata),
       createdAt: createdUpdate.createdAt,
     });
   });

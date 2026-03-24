@@ -9,6 +9,18 @@ import { apiGet } from '../../src/services/api';
 import { SessionSummary } from '../../src/types/api';
 import { formatShortDate } from '../../src/utils/formatDate';
 
+function getStatusPill(status: SessionSummary['status']) {
+  if (status === 'live') {
+    return { backgroundColor: '#dcfce7', textColor: '#166534', label: 'Live' };
+  }
+
+  if (status === 'upcoming') {
+    return { backgroundColor: '#dbeafe', textColor: '#1d4ed8', label: 'Upcoming' };
+  }
+
+  return { backgroundColor: '#e5e7eb', textColor: '#4b5563', label: 'Ended' };
+}
+
 export default function HomeScreen() {
   const { sitterProfile } = useAuth();
   const router = useRouter();
@@ -99,12 +111,16 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         }
-        renderItem={({ item }) => (
+        renderItem={({ item }) => {
+          const statusPill = getStatusPill(item.status);
+          const canCapture = item.isActive && item.status === 'live';
+
+          return (
           <Pressable
             onPress={() => router.push(`/sessions/${item.id}`)}
             className="rounded-3xl border border-gray-200 px-5 py-5"
             style={{
-              backgroundColor: item.isActive ? '#ffffff' : '#f9fafb',
+              backgroundColor: canCapture ? '#ffffff' : '#f9fafb',
             }}
           >
             <View className="flex-row items-start justify-between gap-3">
@@ -117,7 +133,7 @@ export default function HomeScreen() {
               </View>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {item.isActive ? (
+                {canCapture ? (
                   <Pressable
                     onPress={(e) => {
                       e.stopPropagation();
@@ -138,13 +154,13 @@ export default function HomeScreen() {
 
                 <View
                   className="rounded-full px-3 py-2"
-                  style={{ backgroundColor: item.isActive ? '#dcfce7' : '#e5e7eb' }}
+                  style={{ backgroundColor: statusPill.backgroundColor }}
                 >
                   <Text
                     className="text-xs font-semibold uppercase tracking-[1px]"
-                    style={{ color: item.isActive ? '#166534' : '#4b5563' }}
+                    style={{ color: statusPill.textColor }}
                   >
-                    {item.isActive ? 'Live' : 'Archived'}
+                    {statusPill.label}
                   </Text>
                 </View>
               </View>
@@ -177,7 +193,8 @@ export default function HomeScreen() {
               </View>
             </View>
           </Pressable>
-        )}
+          );
+        }}
       />
 
       <StatusBar style="auto" />
