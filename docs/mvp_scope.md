@@ -4,11 +4,13 @@
 
 - Sitter profile (basic: name, bio, location, profile photo)
 - Email/password authentication for sitters
-- Session creation (pet name, pet type, owner name, start date)
+- Session creation (pet name, pet type, owner name, start date, end date)
+- Automatic session status (`upcoming`, `live`, `ended`) based on stay window
 - Photo and video updates (up to 60s video, 50MB max)
+- Optional captions and multi-tag updates
 - Owner feed accessible via web browser — no app install required
 - Generate unique private share link per session
-- Simple UI (2-tab navigation: Sessions + Profile; contextual capture per session)
+- Simple UI (2-tab navigation: Sessions + Profile; contextual capture per live session)
 
 ## Out of Scope
 
@@ -20,6 +22,7 @@
 - Messaging
 - Payments
 - Multi-user accounts
+- Full inline playback of freshly recorded local videos before posting
 
 ## Success Criteria
 
